@@ -1,0 +1,59 @@
+﻿TUDO ORGANIZADO (bot de WhatsApp + agendador do notebook)
+
+O QUE TEM AQUI
+  1-GITHUB\      -> o que você sobe no seu repositório do GitHub
+  2-NOTEBOOK\    -> o que fica no notebook
+
+COMO O SEU REPOSITORIO NO GITHUB DEVE FICAR
+  worker.js
+  bot-whatsapp\
+      package.json   index.js   canal.js   painel.js   atualizador.js
+      iniciar-bot.cmd   README.md   .gitignore   .env.example
+  (o resto do que já existe no repositório pode continuar lá)
+
+NUNCA suba um arquivo chamado .env no GitHub: ele guarda as senhas. Este ZIP não tem .env, está certo.
+
+PASSO A PASSO (faça no notebook, pelo AnyDesk, uma vez)
+
+1) Extraia este ZIP (botão direito > Extrair tudo).
+
+2) GITHUB: abra o seu repositório no github.com > Add file > Upload files.
+   Arraste de dentro de 1-GITHUB: a pasta bot-whatsapp e o arquivo worker.js
+   (o worker.js novo substitui o antigo). Clique em Commit changes.
+
+3) CLOUDFLARE: coloque o conteúdo do worker.js no seu worker (se ele já estiver ligado ao GitHub, atualiza sozinho).
+   Em Settings > Variables and Secrets, crie CANAL_SEGREDO com uma frase longa e aleatória. Anote a frase.
+
+4) NOTEBOOK: dê dois cliques em 2-NOTEBOOK\PREPARAR-NOTEBOOK.bat.
+   Ele instala Node.js, Git e Tailscale e pede o endereço do repositório (botão verde Code, termina com .git).
+   Se o repositório for privado, o Windows abre uma janela para entrar na sua conta do GitHub.
+
+5) SENHAS: abra C:\bot-repo\bot-whatsapp\.env no Bloco de Notas e preencha:
+     WORKER_URL     = endereço do seu worker (https://....workers.dev)
+     CANAL_SEGREDO  = a mesma frase do passo 3
+     NUMERO_BOT     = número do chip do bot, com 55 + DDD, só números
+     PAINEL_SENHA   = uma senha forte para o painel
+   (Se o .env não aparecer, ative "Extensões de nomes de arquivos" no menu Exibir do Explorador.)
+
+6) CELULAR: instale o app Tailscale no celular e no notebook e entre com a MESMA conta.
+
+7) LIGAR E PAREAR: dê dois cliques em C:\bot-repo\bot-whatsapp\iniciar-bot.cmd
+   (a primeira vez leva 1 ou 2 minutos; se o firewall perguntar, clique em Permitir).
+   No celular, abra http://NOME-DO-NOTEBOOK:3000 (o nome aparece no app Tailscale), entre com a PAINEL_SENHA
+   e digite o código no WhatsApp do chip do bot:
+   Aparelhos conectados > Conectar um aparelho > Conectar com número de telefone.
+
+8) AGENDADOR: mova a pasta 2-NOTEBOOK\agenda-pc para C:\ (fica C:\agenda-pc) e dê dois cliques em INSTALAR.bat.
+   Se o Windows mostrar aviso azul: Mais informações > Executar assim mesmo.
+
+PRONTO. Daqui pra frente:
+  - Ligou o notebook e entrou no Windows, o resto acontece sozinho nos horários.
+  - Para mudar o código, edite no GitHub pelo celular. O notebook se atualiza sozinho (ou toque em
+    "Atualizar o bot" no painel).
+  - Horários padrão: 00:00 liga o bot e fecha OBS/TikFinity; 19:45 fecha o bot; 20:00 abre OBS/TikFinity.
+
+LEMBRETES
+  - Use um chip só do bot, nunca o número principal da imobiliária.
+  - O notebook precisa ficar ligado, na tomada e com o seu usuário logado.
+  - Para o bot responder quem escreveu enquanto esteve desligado (até 5 horas), tire o # da linha
+    IGNORAR_ANTIGAS_MIN=300 no .env.
