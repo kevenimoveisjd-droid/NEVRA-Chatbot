@@ -37,13 +37,14 @@ async function cerebro(p) {
   const rel = setTimeout(() => ctrl.abort(), 45000);
   try {
     const r = await fetch(WORKER_URL + "/api/canal", { method: "POST", signal: ctrl.signal, headers: { "Content-Type": "application/json", "x-canal-segredo": E.CANAL_SEGREDO || "" }, body: JSON.stringify(p) });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error("worker " + r.status + ": " + (j.erro || ""));
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error("worker " + r.status + ": " + ((j && j.erro) || "sem detalhe") + (r.status === 401 ? " (a CANAL_SEGREDO do .env é diferente da do Cloudflare)" : ""));
+    if (!j || j.ok !== true) throw new Error("o worker respondeu algo inesperado: confira se o worker.js novo está no Cloudflare e se a WORKER_URL está certa");
     return j;
   } finally { clearTimeout(rel); }
 }
 
-let atual = null, conectando = false, tentativas = 0, pedindoCodigo = false, timer = null;
+let atual = null, conectando = false, tentativas = 0, codigosGerados = 0, timer = null;
 const proxy = {
   sendMessage: (...a) => atual.sendMessage(...a),
   sendPresenceUpdate: (...a) => atual.sendPresenceUpdate(...a),
@@ -66,27 +67,38 @@ async function conectar() {
       markOnlineOnConnect: false, syncFullHistory: false, generateHighQualityLinkPreview: false,
     });
     atual = sock;
+    let codigoPedido = false; // um código só por conexão: pedir outro invalida o anterior
     sock.ev.on("creds.update", saveCreds);
     sock.ev.on("messages.upsert", ({ messages, type }) => { if (type === "notify") for (const m of messages) canal.aoReceber(m); });
     sock.ev.on("connection.update", async (u) => {
       if (sock !== atual) return;
       const { connection, lastDisconnect, qr } = u;
-      if (qr && !state.creds.registered && !pedindoCodigo && NUMERO) {
-        pedindoCodigo = true;
-        try { st.codigo = await sock.requestPairingCode(NUMERO); st.status = "aguardando_pareamento"; log("Código de pareamento gerado. Veja no painel."); }
-        catch (e) { log("Não consegui gerar o código: " + (e && e.message)); }
-        pedindoCodigo = false;
+      if (qr && !state.creds.registered && !codigoPedido && NUMERO) {
+        codigoPedido = true;
+        try {
+          st.codigo = await sock.requestPairingCode(NUMERO); st.status = "aguardando_pareamento"; codigosGerados++;
+          log("Código de pareamento gerado. Veja no painel e digite no WhatsApp em até 1 minuto.");
+        } catch (e) { log("Não consegui gerar o código: " + (e && e.message)); }
       }
       if (connection === "open") {
-        st.status = "conectado"; st.codigo = ""; tentativas = 0;
+        st.status = "conectado"; st.codigo = ""; tentativas = 0; codigosGerados = 0;
         st.numero = String((sock.user && sock.user.id) || "").split(":")[0].split("@")[0];
         log("Conectado ao WhatsApp.");
       }
       if (connection === "close") {
         const code = lastDisconnect && lastDisconnect.error && lastDisconnect.error.output && lastDisconnect.error.output.statusCode;
-        st.status = "desconectado"; st.numero = "";
+        st.status = "desconectado"; st.numero = ""; st.codigo = ""; // o código antigo não vale mais
         const parar = [DisconnectReason.loggedOut, DisconnectReason.forbidden, DisconnectReason.connectionReplaced].includes(code);
-        if (parar) { log("Desconectado (motivo " + code + "). Não vou reconectar sozinho: veja o painel."); return; }
+        if (parar) {
+          log(!state.creds.registered
+            ? "O pareamento não foi concluído (o código expirou ou foi recusado). No painel, toque em 'Gerar novo código de pareamento' e digite o código logo em seguida."
+            : "Desconectado (motivo " + code + "). Não vou reconectar sozinho: veja o painel.");
+          return;
+        }
+        if (!state.creds.registered && codigosGerados >= 4) {
+          log("Parei de gerar códigos novos (ninguém digitou). No painel, toque em 'Gerar novo código de pareamento' quando for digitar.");
+          return;
+        }
         const espera = Math.min(60000, 2000 * 2 ** tentativas++);
         log("Conexão caiu (motivo " + code + "). Tentando de novo em " + Math.round(espera / 1000) + "s.");
         timer = setTimeout(conectar, espera);
